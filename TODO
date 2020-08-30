@@ -1,0 +1,20 @@
+### TODO LASTFM LOVED TRACKS DOWNLOADER ###
+
+YOUTUBE:
+- for site%3Ayoutube.com++%22Gameboyz%22++%22Wir+Sind+Drei+%27+Original+Mix%22
+    it retrieve the track link in the header! But in the g links there is only the playlist.
+    * better first grab links in the header to check if there are any that match:
+	    <g-section-with-header>
+    	this one has the carroselll above the "g" links
+    * or user a MOBILE profile. this response appears to don't have the carrousell
+
+BANDCAMP: 
+- por ahi que sea un album (ahora lo baneo):
+    - hay casos donde que un release de un solo rtack pueda figurar como '/album/'?
+    - iterar por todos los tracks y ver si hay un song con el mismo nombre?
+    
+better handling of searches
+	- hacks for the google captcha
+		https://stackoverflow.com/questions/58872451/how-to-bypass-google-captcha-with-selenium-and-python
+		https://stackoverflow.com/questions/55493536/how-to-deal-with-the-captcha-when-doing-web-scraping-in-puppeteer
+		https://www.sololearn.com/Discuss/605019/google-search-results-scraping-captcha-problem
