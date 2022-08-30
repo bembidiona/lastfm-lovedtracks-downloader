@@ -1,5 +1,7 @@
 import re
 import os
+from os import listdir
+from os.path import isfile, join
 import time #for trying to not make google amgery
 from random import random #for trying to not make google amgery
 import sys # for passing arguments from the console
@@ -10,6 +12,7 @@ import youtube_dl #for downloading mp3 files from youtube
 import mutagen #for tagging downloaded mp3
 from mutagen.easyid3 import EasyID3 #for tagging downloaded mp3.
 from fuzzywuzzy import fuzz # for fuzzy matching string
+
 # --------------------------------------------
 
 
@@ -124,10 +127,12 @@ def download_songs_in_list(user_list):
     SECONDS_TO_WAIT_BETWEEN_GOOGLE_SEARCHES
 
     last_processed_song_index = 0
+    files_to_not_dl_again = [f for f in listdir(PATH_DOWNLOADS) if isfile(join(PATH_DOWNLOADS, f))]
 
     try: # so if conextions is lost or something, we can save all the non downloaded tracks to a file
         #start downloading
         for i, track_data in enumerate(list_of_tracks_to_download):
+            
             print(f"processing {i+1}/{len(list_of_tracks_to_download)}")
             print(f"track_data: {track_data}")
             download_was_successful = False
@@ -142,7 +147,14 @@ def download_songs_in_list(user_list):
             filename = f"{clean_artist} - {clean_title}"
             filefullpath = f"{PATH_DOWNLOADS}{filename}.mp3"
 
-            
+            skip = False
+            for file in files_to_not_dl_again:
+                if file.__contains__(filename):
+                    print(f"{filename} is already downloaded. Skipping.")
+                    skip = True
+                    continue
+            if skip: continue
+
             if t_url != None: # Then lastfm already provided a handy youtube link!
                 print(f"Trying YOUTUBE provided by LastFM for {filename}")
                 download_was_successful = download_from_youtube(t_url, filename)
