@@ -1,3 +1,4 @@
+from genericpath import exists
 import re
 import os
 from os import listdir
@@ -146,16 +147,17 @@ def download_songs_in_list(user_list):
             clean_title = re.sub(r'[\\~#%&*{}/:<>?|\"-]+', "'", t_title)
             filename = f"{clean_artist} - {clean_title}"
             filefullpath = f"{PATH_DOWNLOADS}{filename}.mp3"
+            m4afilefullpath = f"{PATH_DOWNLOADS}{filename}.m4a"
 
             skip = False
             for file in files_to_not_dl_again:
                 if file.__contains__(filename):
                     print(f"{filename} is already downloaded. Skipping.")
                     skip = True
+                    download_was_successful = True
                     continue
-            if skip: continue
 
-            if t_url != None: # Then lastfm already provided a handy youtube link!
+            if not download_was_successful and t_url != None: # Then lastfm already provided a handy youtube link!
                 print(f"Trying YOUTUBE provided by LastFM for {filename}")
                 download_was_successful = download_from_youtube(t_url, filename)
 
@@ -207,13 +209,18 @@ def download_songs_in_list(user_list):
                     download_was_successful = download_from_youtube(link_to_release, filename)
 
             # TAG
-            if download_was_successful:
+            if download_was_successful :
                 #add metatags to the downloaded mp3
                 try:
+                    if not exists(filefullpath) and exists(m4afilefullpath):
+                        filefullpath = m4afilefullpath
                     metatag = EasyID3(filefullpath)
                 except mutagen.id3.ID3NoHeaderError:
                     metatag = mutagen.File(filefullpath, easy=True)
-                    metatag.add_tags()    
+                    if len(metatag) == 0: 
+                        metatag.add_tags()
+                except:
+                    print(f"Unknow error while writing metadata on {filename}")
                 metatag['title'] = t_title
                 metatag['artist'] = t_artist
                 metatag.save()
