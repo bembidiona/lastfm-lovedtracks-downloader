@@ -1,3 +1,4 @@
+from genericpath import exists
 import re
 import os
 from os import listdir
@@ -8,7 +9,7 @@ import sys # for passing arguments from the console
 # -------externals------
 from bs4 import BeautifulSoup # for scrapping
 import requests # for scrapping
-import youtube_dl #for downloading mp3 files from youtube
+import yt_dlp #for downloading mp3 files from youtube
 import mutagen #for tagging downloaded mp3
 from mutagen.easyid3 import EasyID3 #for tagging downloaded mp3.
 from fuzzywuzzy import fuzz # for fuzzy matching string
@@ -40,8 +41,8 @@ def download_from_youtube(url, filename):
             }],
             'outtmpl': f'{PATH_DOWNLOADS}{filename}.%(ext)s',
         }
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download(url)
 
         return True
     except:
@@ -133,7 +134,7 @@ def download_songs_in_list(user_list):
         #start downloading
         for i, track_data in enumerate(list_of_tracks_to_download):
             
-            print(f"processing {i+1}/{len(list_of_tracks_to_download)}")
+            print(f" ============================= processing {i+1}/{len(list_of_tracks_to_download)}")
             print(f"track_data: {track_data}")
             download_was_successful = False
             t_artist = track_data[0]
@@ -146,16 +147,17 @@ def download_songs_in_list(user_list):
             clean_title = re.sub(r'[\\~#%&*{}/:<>?|\"-]+', "'", t_title)
             filename = f"{clean_artist} - {clean_title}"
             filefullpath = f"{PATH_DOWNLOADS}{filename}.mp3"
+            m4afilefullpath = f"{PATH_DOWNLOADS}{filename}.m4a"
 
             skip = False
             for file in files_to_not_dl_again:
                 if file.__contains__(filename):
                     print(f"{filename} is already downloaded. Skipping.")
                     skip = True
+                    download_was_successful = True
                     continue
-            if skip: continue
 
-            if t_url != None: # Then lastfm already provided a handy youtube link!
+            if not download_was_successful and t_url != None: # Then lastfm already provided a handy youtube link!
                 print(f"Trying YOUTUBE provided by LastFM for {filename}")
                 download_was_successful = download_from_youtube(t_url, filename)
 
@@ -207,13 +209,18 @@ def download_songs_in_list(user_list):
                     download_was_successful = download_from_youtube(link_to_release, filename)
 
             # TAG
-            if download_was_successful:
+            if download_was_successful :
                 #add metatags to the downloaded mp3
                 try:
+                    if not exists(filefullpath) and exists(m4afilefullpath):
+                        filefullpath = m4afilefullpath
                     metatag = EasyID3(filefullpath)
                 except mutagen.id3.ID3NoHeaderError:
                     metatag = mutagen.File(filefullpath, easy=True)
-                    metatag.add_tags()    
+                    if len(metatag) == 0: 
+                        metatag.add_tags()
+                except:
+                    print(f"Unknow error while writing metadata on {filename}")
                 metatag['title'] = t_title
                 metatag['artist'] = t_artist
                 metatag.save()
@@ -248,6 +255,8 @@ if __name__ == "__main__":
     except:
         file_list_of_tracks = "mermaidfood-lovedtracks.txt"
 
+    if not os.path.exists("./ffmpeg.exe"):
+        print("WARNING: ffmpeg.exe not detected, it is strongly recommanded to use it to download the good formats of songs. You can download it here https://www.ffmpeg.org/download.html ")
 
     if isinstance(file_list_of_tracks, str):
         #create a folder with the same name of the listfile
