@@ -13,8 +13,22 @@ import yt_dlp #for downloading mp3 files from youtube
 import mutagen #for tagging downloaded mp3
 from mutagen.easyid3 import EasyID3 #for tagging downloaded mp3.
 from fuzzywuzzy import fuzz # for fuzzy matching string
-
 # --------------------------------------------
+
+# https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
+# Colors for colored print 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    PURPLE = '\033[95m'
+    GREY =  '\033[90m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 
 def fuzzy_match_strings(a, b):
@@ -32,6 +46,7 @@ def download_from_youtube(url, filename):
     #example https://www.youtube.com/watch?v=_yB8Ci7X5HU
     try:
         ydl_opts = {
+            'quiet': True,
             'format': 'bestaudio/best',
             'noplaylist':True,
             'postprocessors': [{
@@ -39,14 +54,14 @@ def download_from_youtube(url, filename):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
-            'outtmpl': f'{PATH_DOWNLOADS}{filename}.%(ext)s',
+            'outtmpl': f'{PATH_DOWNLOADS}{str.rstrip(filename,".mp3")}.%(ext)s',
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(url)
+            ydl.download(url, )
 
         return True
     except:
-        print(f"FAIL: YOUTUBE VIDEO UNAVAILABLE: {url}")
+        print(bcolors.FAIL + f"FAIL: YOUTUBE VIDEO UNAVAILABLE: {url}"+ bcolors.ENDC)
         return False
 
 def google_search(site, artist_name, song_name):
@@ -65,16 +80,24 @@ def google_search(site, artist_name, song_name):
     soup = BeautifulSoup(page.content, "html.parser")
     # # download_was_successful = download_from_youtube(t_url)
 
+    # Uncomment for Debug Purpose
+    #outputFile = open("./outputFile.html", "w", encoding="utf-8")
+    #outputFile.write(page.text)
+    #outputFile.flush()
+
     if (len(soup.findAll('form', id='captcha-form')) > 0):
         # damn, google aready trow us the captcha
-        print("!!!! WARNING: GOOGLE IS POLICING WITH THE CAPTCHA :( !!!!")
+        print(bcolors.WARNING + "!!!! WARNING: GOOGLE IS POLICING WITH THE CAPTCHA :( !!!!" + bcolors.ENDC)
         captcha_triggered = True
     else:
-        google_links = soup.findAll('div', class_='r')
+        google_links = soup.findAll('div', id="search") # class r doesnt work anymore
         
         for div in google_links:
-
-            link_title = div.find("h3").string
+            divh3 = div.find("h3")
+            if divh3 == None:
+                continue
+            
+            link_title = divh3.string
 
             if fuzzy_match_strings(artist_name, link_title) and fuzzy_match_strings(song_name, link_title):
                 tempty_link = div.find("a")["href"]
@@ -128,14 +151,21 @@ def download_songs_in_list(user_list):
     SECONDS_TO_WAIT_BETWEEN_GOOGLE_SEARCHES
 
     last_processed_song_index = 0
-    files_to_not_dl_again = [f for f in listdir(PATH_DOWNLOADS) if isfile(join(PATH_DOWNLOADS, f))]
-
+    #files_to_not_dl_again = [file for file in glob.iglob(PATH_DOWNLOADS+'/*', recursive=True) if isfile(join(PATH_DOWNLOADS, f))]
+    files_to_not_dl_again = list()
+    for folder, subfolders, files in os.walk(PATH_DOWNLOADS):
+        for file in files:
+            print(join(folder, file))
+            if isfile(join(folder, file)):
+                files_to_not_dl_again.append(file)
+    
     try: # so if conextions is lost or something, we can save all the non downloaded tracks to a file
         #start downloading
         for i, track_data in enumerate(list_of_tracks_to_download):
             
             print(f" ============================= processing {i+1}/{len(list_of_tracks_to_download)}")
-            print(f"track_data: {track_data}")
+            
+            print(f"{bcolors.GREY}track_data: {track_data}{bcolors.ENDC}")
             download_was_successful = False
             t_artist = track_data[0]
             t_title = track_data[1]
@@ -146,30 +176,38 @@ def download_songs_in_list(user_list):
             clean_artist = re.sub(r'[\\~#%&*{}/:<>?|\"-]+', "'", t_artist)
             clean_title = re.sub(r'[\\~#%&*{}/:<>?|\"-]+', "'", t_title)
             filename = f"{clean_artist} - {clean_title}"
-            filefullpath = f"{PATH_DOWNLOADS}{filename}.mp3"
-            m4afilefullpath = f"{PATH_DOWNLOADS}{filename}.m4a"
-
+            fileLocalPath = f".{os.path.altsep}{clean_artist}{os.path.altsep}{filename}.mp3"
+            filefullpath = f"{PATH_DOWNLOADS}{clean_artist}{os.path.altsep}{filename}.mp3"
+            m4afilefullpath = f"{PATH_DOWNLOADS}{clean_artist}{os.path.altsep}{filename}.m4a"
             skip = False
             for file in files_to_not_dl_again:
                 if file.__contains__(filename):
-                    print(f"{filename} is already downloaded. Skipping.")
+                    print(f"{bcolors.OKCYAN}{filename} is already downloaded. Skipping.{bcolors.ENDC}")
                     skip = True
                     download_was_successful = True
                     continue
 
             if not download_was_successful and t_url != None: # Then lastfm already provided a handy youtube link!
                 print(f"Trying YOUTUBE provided by LastFM for {filename}")
-                download_was_successful = download_from_youtube(t_url, filename)
+                download_was_successful = download_from_youtube(t_url, fileLocalPath)
 
+
+            # if still no luck, lets try searching in YOUTUBE!
+            if not download_was_successful and not captcha_is_already_triggered:
+                print(f"{bcolors.GREY}Searching on YOUTUBE for {filename}{bcolors.ENDC}")
+                link_to_release, captcha_is_already_triggered = google_search("youtube.com", t_artist, t_title)
+
+                if link_to_release != None:
+                    download_was_successful = download_from_youtube(link_to_release, fileLocalPath)
 
             # if still no luck, lets try in BANDCAMP!
             if not download_was_successful and not captcha_is_already_triggered:
-                print(f"Searching on BANDCAMP for {filename}")
+                print(f"{bcolors.GREY}Searching on BANDCAMP for {filename}{bcolors.ENDC}")
                 
                 link_to_release, captcha_is_already_triggered = google_search("bandcamp.com", t_artist, t_title)
 
                 if link_to_release != None:
-                    print(f"Going to {link_to_release}")
+                    print(f"{bcolors.GREY}Going to {link_to_release}{bcolors.ENDC}")
                     # ok, names somewhat matches, so we are good
                     page = requests.get(link_to_release)
                     soup = BeautifulSoup(page.content, 'html.parser')
@@ -185,7 +223,7 @@ def download_songs_in_list(user_list):
                             if len(track_file) > 0:  # check for fake sites, or no downloads available
                                 track_file = track_file[0] # this page should be a "track" type one. so grabbing the first one is fine 
                                 if track_file == "null":
-                                    print("FAIL!: free reproduction of the song is disabled!")
+                                    print(bcolors.FAIL + "FAIL!: free reproduction of the song is disabled!" + bcolors.ENDC)
                                 else:
                                     # {"mp3-128":"https://t4.bcbits.com/stream/2ca2dd116679f13a60b3b1a7060f388b/mp3-128/2809292185?p=0&ts=1598108756&t=b80c4e8b8138b337a682c6681b9ec24e1b8a7f1e&token=1598108756_c563b569a2834cced9b91b6226e9dce11e1de430"}
                                     track_file = track_file.split(":", 1)[1]
@@ -200,36 +238,33 @@ def download_songs_in_list(user_list):
                                     # already found the script with the data, so break out of the loop
                                 break
 
-            # if still no luck, lets try searching in YOUTUBE!
-            if not download_was_successful and not captcha_is_already_triggered:
-                print(f"Searching on YOUTUBE for {filename}")
-                link_to_release, captcha_is_already_triggered = google_search("youtube.com", t_artist, t_title)
-
-                if link_to_release != None:
-                    download_was_successful = download_from_youtube(link_to_release, filename)
 
             # TAG
             if download_was_successful :
                 #add metatags to the downloaded mp3
                 try:
+
                     if not exists(filefullpath) and exists(m4afilefullpath):
                         filefullpath = m4afilefullpath
+
                     metatag = EasyID3(filefullpath)
+
                 except mutagen.id3.ID3NoHeaderError:
                     metatag = mutagen.File(filefullpath, easy=True)
                     if len(metatag) == 0: 
                         metatag.add_tags()
-                except:
-                    print(f"Unknow error while writing metadata on {filename}")
+                except Exception as e:
+                    print(bcolors.FAIL + str(e) + bcolors.ENDC )
+                    print(bcolors.FAIL + f"Unknow error while writing metadata on {filename}"  + bcolors.ENDC)
                 metatag['title'] = t_title
                 metatag['artist'] = t_artist
                 metatag.save()
             else:
                 if not captcha_was_alerted and captcha_is_already_triggered:
-                    failed_tracks.append(f"!!! WARNING: CAPTCHA WAS PROBABLY TRIGGERED FROM HERE :( !!!")
+                    failed_tracks.append(bcolors.WARNING + f"!!! WARNING: CAPTCHA WAS PROBABLY TRIGGERED FROM HERE :( !!!" + bcolors.ENDC )
                     captcha_was_alerted = True
 
-                print(f"FAIL FINDING OR DOWNLOADING: {t_title} | {t_artist}")
+                print(bcolors.FAIL + f"FAIL FINDING OR DOWNLOADING: {t_title} | {t_artist}"  + bcolors.ENDC )
                 failed_tracks.append(f"{t_artist} || {t_title}")
 
             last_processed_song_index = i+1
@@ -247,7 +282,7 @@ def download_songs_in_list(user_list):
             logfile.write("\n".join(non_downloaded_tracks))
 
 # GLOBAL CONSTANTS
-SECONDS_TO_WAIT_BETWEEN_GOOGLE_SEARCHES = 30
+SECONDS_TO_WAIT_BETWEEN_GOOGLE_SEARCHES = 10
 # --------------------------------------------
 if __name__ == "__main__":
     try:
@@ -256,7 +291,7 @@ if __name__ == "__main__":
         file_list_of_tracks = "mermaidfood-lovedtracks.txt"
 
     if not os.path.exists("./ffmpeg.exe"):
-        print("WARNING: ffmpeg.exe not detected, it is strongly recommanded to use it to download the good formats of songs. You can download it here https://www.ffmpeg.org/download.html ")
+        print(bcolors.WARNING + "WARNING: ffmpeg.exe not detected, it is strongly recommanded to use it to download the good formats of songs. You can download it here https://www.ffmpeg.org/download.html " + bcolors.ENDC )
 
     if isinstance(file_list_of_tracks, str):
         #create a folder with the same name of the listfile
